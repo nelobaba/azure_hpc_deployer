@@ -1,7 +1,7 @@
 # Output the names of the created resources
 # These outputs can be viewed after 'terraform apply' is successfully executed.
 output "resource_group_name" {
-  value = azurerm_resource_group.hpc_deployer_rg.name
+  value = data.azurerm_resource_group.hpc_deployer_rg.name
 }
 
 output "virtual_network_name" {

@@ -1,3 +1,9 @@
+variable "resource_group_name" {
+  default = "hpc_deployer"
+  type = string
+  description = "deployed manually"
+}
+
 variable "vm_name" {
   default = "hpc-cyclecloud-cluster-vm"
 }

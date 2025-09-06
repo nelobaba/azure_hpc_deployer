@@ -1,0 +1,83 @@
+
+name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Select action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+  # workflow_call:
+  #   inputs:
+  #     environment:
+  #       required: true
+  #       type: string
+  #       description: 'The target environment (e.g., dev, prod)'
+  #     terraform_directory:
+  #       required: true
+  #       type: string
+  #       description: 'The directory containing Terraform code'
+  #     resource_group_name:
+  #       required: false
+  #       type: string
+  #       description: 'Optional: Resource Group name for state file'
+  #   secrets:
+  #     AZURE_CLIENT_ID:
+  #       required: true
+  #     AZURE_CLIENT_SECRET:
+  #       required: true
+  #     AZURE_TENANT_ID:
+  #       required: true
+  #     AZURE_SUBSCRIPTION_ID:
+  #       required: true
+
+jobs:
+  terraform_deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - name: Terraform Init
+        id: init
+        run: |
+          cd terraform
+          terraform init -backend-config="resource_group_name=hpc_deployer" -backend-config="storage_account_name=hpcdeployertfstate" -backend-config="container_name=tfstate" -backend-config="key=terraform.tfstate"
+      - name: Execute terraform action
+        id: run_action
+        run: |
+          case "${{ github.event.inputs.action }}" in
+            plan)
+              cd terraform
+              terraform plan -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+              ;;
+            apply)
+              cd terraform
+              terraform apply -auto-approve
+              ;;
+            destroy)
+              cd terraform
+              terraform destroy -auto-approve
+              ;;
+            *)
+              echo "Unknown environment"
+              exit 1
+              ;;
+          esac
+    
