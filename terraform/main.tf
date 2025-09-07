@@ -3,14 +3,14 @@ provider "azurerm" {
   subscription_id = var.subscription_id
 }
 
-# terraform {
-#   backend "azurerm" {
-#     resource_group_name = "hpc_deployer"
-#     storage_account_name = "hpcdeployertfstate"
-#     container_name = "tfstate"
-#     key = "terraform.tfstate"
-#   }
-# }
+terraform {
+  backend "azurerm" {
+    resource_group_name = "hpc_deployer"
+    storage_account_name = "hpcdeployertfstate"
+    container_name = "tfstate"
+    key = "terraform.tfstate"
+  }
+}
 
 locals {
   common_tags = {

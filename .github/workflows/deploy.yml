@@ -40,7 +40,7 @@ jobs:
         id: init
         run: |
           cd terraform
-          terraform init -backend-config="resource_group_name=hpc_deployer" -backend-config="storage_account_name=hpcdeployertfstate" -backend-config="container_name=tfstate" -backend-config="key=terraform.tfstate"
+          terraform init 
       - name: Execute terraform action
         id: run_action
         run: |
