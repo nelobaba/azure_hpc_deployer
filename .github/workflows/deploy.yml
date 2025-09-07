@@ -15,14 +15,14 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # <--- THIS LINE IS REQUIRED BY THE AZURE/LOGIN ACTION
+      # id-token: write # <--- THIS LINE IS REQUIRED BY THE AZURE/LOGIN ACTION
       contents: read
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Azure Login
-        uses: azure/login@v1 # You can try @v2 if @v1 still gives issues, but this permission is key
+        uses: azure/login@v2 # You can try @v2 if @v1 still gives issues, but this permission is key
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
