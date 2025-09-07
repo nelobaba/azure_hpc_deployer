@@ -15,14 +15,14 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # <--- UNCOMMENT THIS LINE. It's required by the action, even for client secret.
+      # id-token: write # <--- ENSURE THIS IS COMMENTED OUT OR REMOVED
       contents: read
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Azure Login
-        uses: azure/login@v2 # <--- CHANGE TO V2
+        uses: azure/login@v1 # You can keep v1 or use v2, but the key is removing OIDC parameters
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -31,8 +31,8 @@ jobs:
           enable-AzPSSession: false
           environment: azurecloud
           allow-no-subscriptions: false
-          # audience: api://AzureADTokenExchange # <--- KEEP THIS COMMENTED OUT
-          auth-type: SERVICE_PRINCIPAL # Keep this to explicitly state your intent
+          # audience: api://AzureADTokenExchange # <--- ABSOLUTELY REMOVE THIS LINE
+          auth-type: SERVICE_PRINCIPAL # Keep this to be explicit
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
