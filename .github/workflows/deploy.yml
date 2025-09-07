@@ -1,4 +1,3 @@
-
 name: Deploy
 on:
   workflow_dispatch:
@@ -16,14 +15,14 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      # id-token: write # <--- Add this line
-      contents: read 
+      id-token: write # <--- UNCOMMENT THIS LINE. It's required by the action, even for client secret.
+      contents: read
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2 # <--- CHANGE TO V2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -32,8 +31,8 @@ jobs:
           enable-AzPSSession: false
           environment: azurecloud
           allow-no-subscriptions: false
-          # audience: api://AzureADTokenExchange # <--- REMOVE THIS LINE
-          auth-type: SERVICE_PRINCIPAL
+          # audience: api://AzureADTokenExchange # <--- KEEP THIS COMMENTED OUT
+          auth-type: SERVICE_PRINCIPAL # Keep this to explicitly state your intent
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -64,4 +63,3 @@ jobs:
               exit 1
               ;;
           esac
-    
