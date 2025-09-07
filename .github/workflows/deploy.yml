@@ -15,7 +15,7 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      # id-token: write # <--- THIS LINE IS REQUIRED BY THE AZURE/LOGIN ACTION
+      id-token: write 
       contents: read
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
