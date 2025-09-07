@@ -35,14 +35,6 @@ jobs:
           echo "Azure CLI login successful. Setting subscription..."
           az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           echo "Subscription set."
-        env:
-          # Optionally, you can pass them as explicit env vars for clarity,
-          # though direct use in the run command is also fine.
-          # AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          # AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          # AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          # AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
