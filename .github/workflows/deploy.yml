@@ -40,7 +40,7 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # <--- Add this line
+      # id-token: write # <--- Add this line
       contents: read 
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
