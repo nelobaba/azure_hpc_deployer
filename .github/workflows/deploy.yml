@@ -15,14 +15,14 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      # id-token: write # <--- ENSURE THIS IS COMMENTED OUT OR REMOVED
+      id-token: write # <--- THIS LINE IS REQUIRED BY THE AZURE/LOGIN ACTION
       contents: read
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Azure Login
-        uses: azure/login@v1 # You can keep v1 or use v2, but the key is removing OIDC parameters
+        uses: azure/login@v1 # You can try @v2 if @v1 still gives issues, but this permission is key
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -31,8 +31,8 @@ jobs:
           enable-AzPSSession: false
           environment: azurecloud
           allow-no-subscriptions: false
-          # audience: api://AzureADTokenExchange # <--- ABSOLUTELY REMOVE THIS LINE
-          auth-type: SERVICE_PRINCIPAL # Keep this to be explicit
+          # audience: api://AzureADTokenExchange # <--- Keep this removed to avoid OIDC authentication to Azure
+          auth-type: SERVICE_PRINCIPAL # Keep this to explicitly use client secret
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
