@@ -1,5 +1,4 @@
-name: Deploy Azure Infrastructure with Terraform
-
+name: Deploy
 on:
   workflow_dispatch:
     inputs:
@@ -17,19 +16,13 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read # Required for actions/checkout to read repository content
-      # IMPORTANT: 'id-token: write' is intentionally omitted here
-      # to prevent any OIDC authentication attempts by the workflow.
-      # We are using Service Principal with client secret exclusively.
-
-    environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
-
+      contents: read
+    environment: ${{ inputs.action }}
     env: # These environment variables are used by the Terraform azurerm provider and backend
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
