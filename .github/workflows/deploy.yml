@@ -25,12 +25,12 @@ jobs:
         run: |
           echo "Attempting manual Azure CLI login using Service Principal..."
           az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
-            --password "${{ secrets.AZURE_CLIENT_SECRET }}" \
-            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --username "${{ secrets.ARM_CLIENT_ID }}" \
+            --password "${{ secrets.ARM_CLIENT_SECRET }}" \
+            --tenant "${{ secrets.ARM_TENANT_ID }}" \
             --output none # Suppress output for security
           echo "Azure CLI login successful. Setting subscription..."
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          az account set --subscription "${{ secrets.ARM_SUBSCRIPTION_ID }}"
           echo "Subscription set."
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -47,15 +47,15 @@ jobs:
           case "${{ github.event.inputs.action }}" in
             plan)
               cd terraform
-              terraform plan -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+              terraform plan -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}"
               ;;
             apply)
               cd terraform
-              terraform apply -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+              terraform apply -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}"
               ;;
             destroy)
               cd terraform
-              terraform destroy -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+              terraform destroy -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}"
               ;;
             *)
               echo "Unknown environment"
