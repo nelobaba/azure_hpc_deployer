@@ -15,10 +15,7 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      # IMPORTANT: Ensure 'id-token: write' is ABSENT from here.
-      # We are explicitly avoiding OIDC, so this permission is not needed
-      # and could potentially cause issues if left in.
-      contents: read # Keep this for actions/checkout
+      contents: read 
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
       - name: Checkout Code
@@ -50,15 +47,15 @@ jobs:
           case "${{ github.event.inputs.action }}" in
             plan)
               cd terraform
-              terraform plan -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+              terraform plan -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
               ;;
             apply)
               cd terraform
-              terraform apply -auto-approve
+              terraform apply -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
               ;;
             destroy)
               cd terraform
-              terraform destroy -auto-approve
+              terraform destroy -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
               ;;
             *)
               echo "Unknown environment"
