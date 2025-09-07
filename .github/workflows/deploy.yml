@@ -1,9 +1,10 @@
-name: Deploy Terraform
+name: Deploy Azure Infrastructure with Terraform
+
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Select action'
+        description: 'Select Terraform action (plan, apply, destroy)'
         required: true
         default: 'plan'
         type: choice
@@ -11,54 +12,85 @@ on:
           - plan
           - apply
           - destroy
+
 jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read 
-    environment: ${{ inputs.action }}
+      contents: read # Required for actions/checkout to read repository content
+      # IMPORTANT: 'id-token: write' is intentionally omitted here
+      # to prevent any OIDC authentication attempts by the workflow.
+      # We are using Service Principal with client secret exclusively.
+
+    environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
+
+    env: # These environment variables are used by the Terraform azurerm provider and backend
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Manual Azure CLI Login
-        run: |
-          echo "Attempting manual Azure CLI login using Service Principal..."
-          az login --service-principal \
-            --username "${{ secrets.ARM_CLIENT_ID }}" \
-            --password "${{ secrets.ARM_CLIENT_SECRET }}" \
-            --tenant "${{ secrets.ARM_TENANT_ID }}" \
-            --output none # Suppress output for security
-          echo "Azure CLI login successful. Setting subscription..."
-          az account set --subscription "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          echo "Subscription set."
+      # --- REMOVE THIS STEP ---
+      # - name: Manual Azure CLI Login
+      #   run: |
+      #     echo "Attempting manual Azure CLI login using Service Principal..."
+      #     az login --service-principal \
+      #       --username "${{ secrets.AZURE_CLIENT_ID }}" \
+      #       --password "${{ secrets.AZURE_CLIENT_SECRET }}" \
+      #       --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+      #       --output none # Suppress output for security
+      #     echo "Azure CLI login successful. Setting subscription..."
+      #     az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      #     echo "Subscription set."
+      # --- END REMOVAL ---
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.8
+          terraform_version: 1.9.8 # Specify your desired Terraform version
+
       - name: Terraform Init
         id: init
         run: |
-          cd terraform
-          terraform init 
-      - name: Execute terraform action
+          cd terraform # Navigate to your Terraform configuration directory
+          terraform init
+        # The azurerm backend will automatically pick up ARM_* environment variables
+        # for authentication, as 'use_azuread_auth = false' is set in your backend config.
+
+      - name: Execute Terraform Action
         id: run_action
         run: |
+          cd terraform # Navigate to your Terraform configuration directory
           case "${{ github.event.inputs.action }}" in
             plan)
-              cd terraform
-              terraform plan -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}"
+              echo "Running Terraform Plan..."
+              terraform plan \
+                -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+                -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+                -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+                -out=tfplan
               ;;
             apply)
-              cd terraform
-              terraform apply -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}"
+              echo "Running Terraform Apply..."
+              # For apply, ensure you pass the same variables or use the generated tfplan file
+              terraform apply -auto-approve \
+                -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+                -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+                -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
               ;;
             destroy)
-              cd terraform
-              terraform destroy -auto-approve -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" -var="subscription_id=${{ secrets.ARM_SUBSCRIPTION_ID }}"
+              echo "Running Terraform Destroy..."
+              terraform destroy -auto-approve \
+                -var="admin_password=${{ secrets.ADMIN_PASSWORD }}" \
+                -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+                -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
               ;;
             *)
-              echo "Unknown environment"
+              echo "Error: Unknown action '${{ github.event.inputs.action }}'"
               exit 1
               ;;
           esac
