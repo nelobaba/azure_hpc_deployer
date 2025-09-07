@@ -47,7 +47,9 @@ sudo python3 /tmp/cyclecloud-cli-installer/install.py -y --installdir /usr/local
 # --- Initialize CycleCloud UI ---
 echo "--> Initializing CycleCloud UI..."
 
-# Use the installed cyclecloud CLI to initialize the UI
-cp /usr/local/bin/cycecloud /usr/bin/
+# Use the installed cyclecloud CLI to initialize the UI and run this command after creating admin and subscription on the UI 
+/usr/local/bin/cyclecloud initialize --loglevel=debug --batch --url=http://localhost:8080 --verify-ssl=false --username="azureuser" --password="Engronyi2025."
+
+
 
 echo "--> Go to the UI to create admin user, create subscription ---->  Azure CycleCloud setup script finished successfully."

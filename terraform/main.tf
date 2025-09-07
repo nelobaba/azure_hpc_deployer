@@ -3,6 +3,15 @@ provider "azurerm" {
   subscription_id = var.subscription_id
 }
 
+terraform {
+  backend "azurerm" {
+    resource_group_name = "hpc_deployer"
+    storage_account_name = "hpcdeployertfstate"
+    container_name = "tfstate"
+    key = "terraform.tfstate"
+  }
+}
+
 locals {
   common_tags = {
     Environment = "development"
@@ -11,14 +20,7 @@ locals {
   }
 }
 
-
-# 1. Create an Azure Resource Group
-# A resource group is a logical container for Azure resources.
-# resource "azurerm_resource_group" "hpc_deployer_rg" {
-#   name     = "hpc_deployer"   # Name of your resource group
-#   location = "Canada Central" # Azure region for the resource group
-#   tags     = local.common_tags
-# }
+data "azurerm_subscription" "current" {}
 
 data "azurerm_resource_group" "hpc_deployer_rg" {
   name = var.resource_group_name
@@ -50,8 +52,6 @@ resource "azurerm_storage_account" "hpc_deployer_sa" {
   account_replication_type = "LRS"
   tags                     = local.common_tags
 }
-
-data "azurerm_subscription" "current" {}
 
 resource "azurerm_network_interface" "nic" {
   name                = "${var.vm_name}-nic"
