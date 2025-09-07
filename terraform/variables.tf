@@ -1,3 +1,8 @@
+variable "subscription_id" {
+  default = "e36d9015-17ec-444c-acae-e0adfec0a98a"
+  type = string
+}
+
 variable "resource_group_name" {
   default = "hpc_deployer"
   type = string
