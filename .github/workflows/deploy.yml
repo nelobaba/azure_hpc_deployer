@@ -15,24 +15,34 @@ jobs:
   terraform_deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write 
-      contents: read
+      # IMPORTANT: Ensure 'id-token: write' is ABSENT from here.
+      # We are explicitly avoiding OIDC, so this permission is not needed
+      # and could potentially cause issues if left in.
+      contents: read # Keep this for actions/checkout
     environment: ${{ inputs.action }} # Use environment to apply protection rules and secrets
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Azure Login
-        uses: azure/login@v2 # You can try @v2 if @v1 still gives issues, but this permission is key
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          enable-AzPSSession: false
-          environment: azurecloud
-          allow-no-subscriptions: false
-          # audience: api://AzureADTokenExchange # <--- Keep this removed to avoid OIDC authentication to Azure
-          auth-type: SERVICE_PRINCIPAL # Keep this to explicitly use client secret
+
+      - name: Manual Azure CLI Login
+        run: |
+          echo "Attempting manual Azure CLI login using Service Principal..."
+          az login --service-principal \
+            --username "${{ secrets.AZURE_CLIENT_ID }}" \
+            --password "${{ secrets.AZURE_CLIENT_SECRET }}" \
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
+            --output none # Suppress output for security
+          echo "Azure CLI login successful. Setting subscription..."
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          echo "Subscription set."
+        env:
+          # Optionally, you can pass them as explicit env vars for clarity,
+          # though direct use in the run command is also fine.
+          # AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          # AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          # AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          # AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
