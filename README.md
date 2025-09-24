@@ -72,3 +72,8 @@ cyclecloud initialize --loglevel=debug --batch \
 ```
 
 > Replace credentials as appropriate for your environment. In production, source from a secret store (Azure Key Vault / GitHub Actions Secrets) instead of hardcoding.
+
+## Next: NFS Shared Storage (Optional)
+
+You can extend this deployment with a dedicated NFS server for shared storage.  
+See the detailed setup guide here: [docs/nfs/README.md](docs/nfs/README.md)
