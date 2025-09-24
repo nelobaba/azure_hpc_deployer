@@ -68,7 +68,7 @@ Return to the **CycleCloud VM** (Bastion SSH session) and run the one-time initi
 ```bash
 cyclecloud initialize --loglevel=debug --batch \
   --url=http://localhost:8080 --verify-ssl=false \
-  --username="azureuser" --password="Engronyi2025."
+  --username="azureuser" --password="12345"
 ```
 
 > Replace credentials as appropriate for your environment. In production, source from a secret store (Azure Key Vault / GitHub Actions Secrets) instead of hardcoding.
