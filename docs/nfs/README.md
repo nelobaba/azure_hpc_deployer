@@ -1,238 +1,119 @@
 # NFS Setup Guide for Azure CycleCloud
 
-This guide walks through creating, configuring, and cleaning up a private NFS server on Azure to be used with CycleCloud clusters.
+This guide walks through creating a Storage Account and an NFS File Share on Azure, then mounting it on your CycleCloud cluster VMs. Unlike managing a private NFS server VM, this uses Azure Files NFS directly with Private Endpoint integration.
 
 ---
 
-## Part A: Create and Configure the Linux VM
+## Part A: Create and Configure the Storage Account (with Private Endpoint)
 
-1. **Create a Linux VM in the Azure Portal**
-
-   - Log in to the **Azure Portal**.
-   - Navigate to **Virtual machines** → **+ Create** → **Virtual machine**.
-   - Use the same **Resource group** as your CycleCloud installation.
-   - Enter a **VM name** (e.g., `nfs-server-vm`).
-   - Choose an **Image** (Ubuntu Server 22.04 LTS recommended, or CentOS Stream 9).
-   - For **Size**, select **Standard_D4s_v3** (4 vCPUs, suitable for NFS server workloads).
-   - For **Administrator account**, select **SSH public key** authentication.
-   - On the **Networking** tab, place the VM in the same **Virtual Network** as your CycleCloud cluster.
-   - For **NIC network security group**, choose **Advanced** and allow **SSH (port 22)** for management only.
-   - On the **Disks** tab, add a new **data disk**. Set **Host caching** to **Read/Write**.
-   - Click **Review + create** → **Create**.
-
-2. **Prepare your SSH key locally**
-
-   - After downloading the private key (`nfs-server-vm-key.pem`) from Azure:
-     ```bash
-     mkdir -p ~/.ssh
-     mv ~/Downloads/nfs-server-vm-key.pem ~/.ssh/
-     chmod 700 ~/.ssh
-     chmod 600 ~/.ssh/nfs-server-vm-key.pem
-     ```
-   - Test SSH access from your local terminal:
-     ```bash
-     ssh -i ~/.ssh/nfs-server-vm-key.pem azureuser@<nfs-vm-public-ip>
-     ```
-   - If your VM has **no public IP**, connect using **Azure Bastion** instead.
-
-3. **Prepare and mount the data disk**
-
-   Once you’re SSH’d into the VM:
-
-   1. **Switch to root**
-
-      ```bash
-      sudo -i
-      ```
-
-      Running as root ensures you have full privileges to format, mount, and edit system files.
-
-   2. **Format the new disk**
-
-      ```bash
-      mkfs.ext4 /dev/sdc
-      ```
-
-      - Creates an **ext4 filesystem** on `/dev/sdc`.
-      - Run this only once for a new disk.
-
-   3. **Create a mount point**
-
-      ```bash
-      mkdir -p /nfs/export
-      ```
-
-   4. **Mount the disk temporarily**
-      ```bash
-      mount /dev/sdc /nfs/export
-      ```
-
-   ### Make the mount persistent
-
-   1. **Find the disk’s UUID**
-
-      ```bash
-      blkid
-      ```
-
-      Example output:
-
-      ```
-      /dev/sda1: UUID="e8fcb3f3-8a2e-43e4-a9c1-b09a0a37a42e" TYPE="ext4"
-      /dev/sdc:  UUID="1234abcd-56ef-7890-1234-abcdef123456" TYPE="ext4"
-      ```
-
-   2. **Edit `/etc/fstab`**
-
-      ```bash
-      nano /etc/fstab
-      ```
-
-      Add:
-
-      ```
-      UUID=<your_uuid>   /nfs/export   ext4   defaults   0   0
-      ```
-
-      Example:
-
-      ```
-      UUID=1234abcd-56ef-7890-1234-abcdef123456   /nfs/export   ext4   defaults   0   0
-      ```
-
-   3. **Save and exit** (`CTRL+O`, `Enter`, `CTRL+X` in nano).
-
-   4. **Test the entry**
-
-      ```bash
-      mount -a
-      ```
-
-   5. **Verify**
-
-      ```bash
-      df -h
-      ```
-
-   6. **Reboot to confirm**
-      ```bash
-      reboot
-      ```
-      After reconnecting, run `df -h` again to confirm `/nfs/export` mounts automatically.
+1. In the Azure Portal, go to **Storage accounts** → **+ Create**.
+2. Choose the same **Resource group** as your CycleCloud deployment.
+3. Under **Basics**:
+   - **Performance**: Premium
+   - **Preferred storage type**: Azure File
+   - **Provisioning model**: Provisioned v2 (capacity, throughput, and IOPS are configured individually)
+   - **Redundancy**: LRS (Locally Redundant Storage) for basic setups
+4. Under **Networking**:
+   - Set **Public network access** to **Disabled**.
+   - In the **Private endpoint** section, click **+ Add private endpoint**.
+     - **Name**: enter a descriptive name (e.g., `nfs-pe`).
+     - **Storage sub-resource**: select **file** from the dropdown.
+     - **Virtual Network**: select the VNet where your CycleCloud cluster runs.
+     - **Subnet**: choose the subnet where your cluster nodes are deployed.
+     - **Private DNS integration**: select **Yes**. If a DNS zone (`privatelink.file.core.windows.net`) already exists, select it; otherwise, allow the wizard to create one.
+5. Click **Review + create** → **Create** and wait for provisioning.
+6. After the account is created, go to **Configuration** (in the left-hand menu) and set **Secure transfer required** to **Disabled**.
 
 ---
 
-## Part B: Install and Configure the NFS Server
+## Part B: Create an NFS File Share
 
-1. **Install NFS packages**
-
-   - On Ubuntu/Debian:
-     ```bash
-     sudo apt-get update
-     sudo apt-get install -y nfs-kernel-server
-     ```
-   - On RHEL/CentOS:
-     ```bash
-     sudo dnf install -y nfs-utils
-     ```
-
-2. **Configure exports**
-
-   - Edit `/etc/exports`:
-     ```bash
-     sudo nano /etc/exports
-     ```
-   - Add a line (replace subnet with your CycleCloud VNet CIDR, e.g., `10.0.1.0/24`):
-
-     ```
-     /nfs/export 10.0.1.0/24(rw,sync,no_subtree_check,no_root_squash)
-     ```
-
-   - Apply configuration:
-     ```bash
-     sudo exportfs -a
-     ```
-
-3. **Restart and enable NFS**
-   ```bash
-   sudo systemctl restart nfs-kernel-server
-   sudo systemctl enable nfs-kernel-server
-   ```
+1. Open the Storage Account you created.
+2. Navigate to **File shares** → **+ File share**.
+3. Enter a **Name** (e.g., `shared`).
+4. Under **Protocol**, select **NFS**.
+5. Set **Root squash**:
+   - **No root squash** (recommended for CycleCloud): root users on the client VM retain root access on the share.
+6. Click **Review + create** → **Create**.
 
 ---
 
-## Part C: Configure Azure Networking and Firewall
+After creation, verify from a CycleCloud VM that DNS resolves correctly:
 
-1. **Allow NFS traffic in the NSG**
-
-   - In the Azure Portal → **NFS VM → Networking → Add inbound port rule**:
-     - Source: `IP addresses`
-     - Source CIDR: `10.0.1.0/24` (CycleCloud subnet)
-     - Destination port ranges: `2049`
-     - Protocol: `Any`
-     - Action: `Allow`
-     - Name: `Allow-NFS`
-
-2. **Verify Linux firewall**
-
-   - On Ubuntu:
-     ```bash
-     sudo ufw status
-     sudo ufw allow from 10.0.1.0/24 to any port nfs
-     ```
-   - On CentOS:
-     ```bash
-     sudo firewall-cmd --add-service=nfs --permanent
-     sudo firewall-cmd --reload
-     ```
-
-3. **Verify NFS service**
-   ```bash
-   sudo ss -tulpn | grep 2049
-   sudo exportfs -v
-   ```
+```bash
+getent hosts <storage-account>.file.core.windows.net
+```
 
 ---
 
-## Part D: Mount the NFS Share on Clients
+## Part C: Mount the NFS Share on a CycleCloud VM
 
-### 1. Mount via CycleCloud UI (External Mount)
+### 1. Install NFS client utilities (if not already installed)
 
-If you’re mounting the share through the CycleCloud **cluster configuration UI**:
+On Ubuntu/Debian:
 
-- Go to your cluster settings in the CycleCloud web UI.
-- Under **File Systems**, choose to add an external mount.
-- Provide the following values:
-  - **Server** → `<nfs-vm-private-ip>`
-  - **Export Path** → `/nfs/export`
-- Save and apply the configuration.
+```bash
+sudo apt-get update
+sudo apt-get install -y nfs-common
+```
 
-CycleCloud will automatically mount the NFS share on all cluster nodes during provisioning.
+On CentOS/RHEL:
 
----
+```bash
+sudo dnf install -y nfs-utils
+```
 
-## Part E: Cleanup
-
-When done with testing or before tearing down resources:
-
-1. **Unmount the NFS share on all clients**
-
-   ```bash
-   sudo umount /mnt/nfs
-   ```
-
-2. **Unmount on the NFS server**
-
-   ```bash
-   sudo umount /nfs/export
-   ```
-
-3. **Destroy resources**
-   - If using Terraform, run your **destroy** workflow.
-   - If provisioned manually, delete the NFS VM, disk, and NSG rules from the Azure Portal.
+Reference: [Mount Azure Files NFS shares (Microsoft Docs)](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-how-to-mount-nfs-shares?tabs=Ubuntu)
 
 ---
 
-At this point you have a complete lifecycle:
+### 3. Mount the NFS share using the classic NFS client
 
-- Create → Configure → Use → Cleanup for NFS on Azure.
+```bash
+sudo mkdir -p /mount/<storage-account>/<share-name>
+sudo mount -t nfs <storage-account>.file.core.windows.net:/<storage-account>/<share-name> /mount/<storage-account>/<share-name> -o vers=4,minorversion=1,sec=sys,nconnect=4
+```
+
+- Replace `<storage-account>` with your account name (e.g., `nfsstrgeacct`).
+- Replace `<share-name>` with the file share name you created (e.g., `shared`).
+
+---
+
+### 4. Verify the mount
+
+```bash
+df -h
+```
+
+---
+
+## Part D: Configure External NFS in CycleCloud
+
+When creating or editing your CycleCloud cluster, add an **External NFS mount** under **File Systems** with the following values:
+
+- **FS Type**: External NFS
+- **IP Address**: `nfsstrgeacct.file.core.windows.net`
+- **Mount Point**: `/mount/nfsstrgeacct/shared`
+- **Export Path**: `/nfsstrgeacct/shared`
+- **Mount Options**: `vers=4,minorversion=1,sec=sys,nconnect=4`
+
+This ensures the NFS share is mounted automatically on all cluster nodes when the cluster is provisioned.
+
+---
+
+At this point, your Azure Files NFS share is integrated with your CycleCloud cluster VMs using Private Endpoint + persistent mount configuration.
+
+---
+
+## References & Further Reading
+
+- Azure Files NFS: Security & Networking
+  https://learn.microsoft.com/en-us/azure/storage/files/files-nfs-protocol#security-and-networking
+- Azure Storage: NFS / Network File System protocol support  
+  https://learn.microsoft.com/en-gb/azure/storage/blobs/network-file-system-protocol-support
+- Troubleshoot Linux NFS for Azure Files  
+  https://learn.microsoft.com/en-us/troubleshoot/azure/azure-storage/files/security/files-troubleshoot-linux-nfs?toc=%2Fazure%2Fstorage%2Ffiles%2Ftoc.json&tabs=Ubuntu
+- Encryption in transit for Azure Files NFS shares  
+  https://learn.microsoft.com/en-us/azure/storage/files/encryption-in-transit-for-nfs-shares?tabs=Ubuntu
+- Mount NFS Azure file shares on Linux
+  https://learn.microsoft.com/en-us/azure/storage/files/storage-files-how-to-mount-nfs-shares?tabs=Ubuntu
