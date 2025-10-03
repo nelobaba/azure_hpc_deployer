@@ -48,7 +48,22 @@ getent hosts <storage-account>.file.core.windows.net
 
 ## Part C: Mount the NFS Share on a CycleCloud VM
 
-### 1. Install NFS client utilities (if not already installed)
+### 1. Verify Encryption in Transit Setting
+
+Before installing or mounting, ensure that **Encryption in transit** is **disabled** for your NFS file share.
+
+Reference: [Encryption in transit for NFS shares (Microsoft Docs)](https://learn.microsoft.com/en-us/azure/storage/files/encryption-in-transit-for-nfs-shares?tabs=Ubuntu)
+
+**Warning**:  
+If **Encryption in transit** is enabled, mounting the share with the standard Linux NFS client will fail with an error like:
+
+```
+mount.nfs: access denied by server while mounting <storage-account>.file.core.windows.net:/<share-name>
+```
+
+---
+
+### 2. Install NFS client utilities (if not already installed)
 
 On Ubuntu/Debian:
 
