@@ -181,6 +181,8 @@ StateSaveLocation = /sched/cluster1/spool/slurmctld
 sudo dd if=/dev/random of=/sched/cluster1/spool/slurmctld/jwt_hs256.key bs=32 count=1
 sudo chown slurm:slurm /sched/cluster1/spool/slurmctld/jwt_hs256.key
 sudo chmod 0600 /sched/cluster1/spool/slurmctld/jwt_hs256.key
+sudo chown slurm:slurm /sched/cluster1/spool/slurmctld
+sudo chmod 0755 /sched/cluster1/spool/slurmctld
 ```
 
 ### Step 4 — Edit Slurm Configs
