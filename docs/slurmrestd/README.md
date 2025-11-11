@@ -534,92 +534,136 @@ less /tmp/curl.log
 
 ---
 
-<!-- ## 7. Submitting a Job via REST API
+# 7. Submit a Test Job via Slurm REST API
 
-Create a job definition JSON file:
+With `slurmrestd` running and JWT authentication configured, you can now submit a test job using the REST API.
 
-```json
+This example:
+
+- Uses the `hpc` partition
+- Runs from `/shared/home/azureuser`
+- Writes output/error files with the job ID
+- Prints basic context (hostname, user, directory), waits, and exits cleanly
+
+---
+
+## 7.1 Create the Job Definition File
+
+On the scheduler node, create `hello_rest.json`:
+
+```bash
+cat > hello_rest.json << 'EOF'
 {
-  "script": "#!/bin/bash\nhostname\nsleep 5",
   "job": {
     "name": "hello_world_rest",
     "partition": "hpc",
-    "time_limit": "00:02:00"
+    "time_limit": 60,
+    "current_working_directory": "/shared/home/azureuser",
+    "standard_output": "hello_world_rest.%j.out",
+    "standard_error": "hello_world_rest.%j.err",
+    "environment": [
+      "HOME=/shared/home/azureuser",
+      "PATH=/usr/local/bin:/usr/bin:/bin",
+      "LANG=en_US.UTF-8"
+    ],
+    "script": "#!/bin/bash\necho \"Hello from Slurm REST\"\nhostname\nwhoami\npwd\nsleep 10\necho \"Done.\"\n"
   }
 }
+EOF
 ```
+
+Key fields:
+
+- `partition`: must match an existing Slurm partition (e.g. `hpc`).
+- `time_limit`: in minutes (here: 60).
+- `current_working_directory`: where the job runs and where output files are written.
+- `standard_output` / `standard_error`: file patterns using `%j` for the job ID.
+- `environment`: minimal safe environment for the job.
+- `script`: the job script content, encoded with `\n` for new lines.
+
+---
+
+## 7.2 Submit the Job via REST API
+
+Assuming from previous steps you already have:
+
+- `API_VERSION` set (e.g. `v0.0.42`)
+- `SLURM_JWT` exported
 
 Submit the job:
 
 ```bash
-curl -X POST   -H "X-SLURM-USER-TOKEN: $SLURM_JWT"   -H "Content-Type: application/json"   -d @hello_job.json   http://127.0.0.1:6820/slurm/v0.0.41/job/submit
+curl -s -k   -H "X-SLURM-USER-TOKEN: $SLURM_JWT"   -H "Content-Type: application/json"   -X POST   -d @hello_rest.json   "http://127.0.0.1:6820/slurm/${API_VERSION}/job/submit"
 ```
 
-Expected output:
+Expected response (example):
 
 ```json
 {
-  "job_id": 42,
+  "job_id": 123,
   "job_submit_user": "azureuser",
   "job_name": "hello_world_rest"
 }
 ```
 
-Check the job:
+Take note of the `job_id` from the response.
+
+---
+
+## 7.3 Verify Job Status
+
+Check the job in the queue:
 
 ```bash
-squeue -j 42
+squeue -j 123
+```
+
+Or for finished jobs (if accounting is enabled):
+
+```bash
+sacct -j 123 -o JobID,JobName,Partition,State,ExitCode
 ```
 
 ---
 
-## 8. Troubleshooting
+## 7.4 Inspect Job Output
 
-| Error                                          | Cause                             | Fix                                                        |
-| ---------------------------------------------- | --------------------------------- | ---------------------------------------------------------- |
-| `I/O error writing script/environment to file` | Bad or unwritable spool directory | Check `SlurmdSpoolDir` permissions                         |
-| `cannot find tls plugin for tls/s2n`           | TLS plugin not built or missing   | Install OpenSSL dev libs or disable TLS                    |
-| `JobState=FAILED Reason=RaisedSignal:53`       | Node unreachable                  | Check node connectivity and state                          |
-| `Slurm accounting storage is disabled`         | No accounting configured          | Enable `AccountingStorageType=accounting_storage/slurmdbd` |
-
----
-
-## 9. Verifying API Endpoints
-
-List available endpoints:
+Once the job has completed, check the output files in `/shared/home/azureuser`:
 
 ```bash
-curl -H "X-SLURM-USER-TOKEN: $SLURM_JWT" http://127.0.0.1:6820/openapi/v0.0.41
+ls -l hello_world_rest.*.out hello_world_rest.*.err
 ```
 
-Query nodes:
+Then:
 
 ```bash
-curl -H "X-SLURM-USER-TOKEN: $SLURM_JWT" http://127.0.0.1:6820/slurm/v0.0.41/nodes
+cat hello_world_rest.123.out
 ```
 
-Query partitions:
+You should see something like:
 
-```bash
-curl -H "X-SLURM-USER-TOKEN: $SLURM_JWT" http://127.0.0.1:6820/slurm/v0.0.41/partitions
+```text
+Hello from Slurm REST
+cluster1-hpc-1
+azureuser
+/shared/home/azureuser
+Done.
 ```
 
 ---
 
-## 10. Optional — Reverse Proxy
+## 7.5 If Submission Fails
 
-If exposing to external systems, run `slurmrestd` behind HTTPS via NGINX or Apache.
+Common issues & checks:
 
-Example NGINX block:
+- **Invalid partition**: Confirm with `scontrol show partition` that `hpc` exists.
+- **I/O error writing script/environment to file**: Check `SlurmdSpoolDir` permissions on the compute nodes.
+- **401 / Unauthorized**: Ensure `SLURM_JWT` is set and the JWT key path matches `AuthAltParameters` in `slurm.conf`.
+- **Connection refused**: Confirm `slurmrestd` is **active (running)** and listening on `127.0.0.1:6820`.
 
-```nginx
-location /slurm/ {
-    proxy_pass http://127.0.0.1:6820/;
-    proxy_set_header X-SLURM-USER-TOKEN $http_authorization;
-}
-```
+If the job submits successfully and the output looks correct, your Slurm REST API job submission flow is working end-to-end.
 
----
+===
 
 ## References & Further Reading
 
@@ -629,22 +673,3 @@ location /slurm/ {
 - [JWT Authentication Docs](https://slurm.schedmd.com/jwt.html)
 - [Slurm REST Source Code (GitHub)](https://github.com/SchedMD/slurm/tree/master/src/plugins/rest)
 - [OpenHPC Documentation](https://openhpc.community/documentation/)
-
----
-
-## Summary
-
-| Component                 | Purpose                    |
-| ------------------------- | -------------------------- |
-| `slurmrestd`              | REST API service for Slurm |
-| `rest_auth/jwt`           | Authentication plugin      |
-| `/etc/default/slurmrestd` | Environment config         |
-| `curl`                    | Submit and test jobs       |
-| `scontrol`, `squeue`      | Native CLI validation      |
-
----
-
-**Author:** Jonathan A. Martins
-**Cluster:** `cluster1`
-**Last Updated:** November 2025
-**File:** `docs/slurmrestd/README.md` -->
