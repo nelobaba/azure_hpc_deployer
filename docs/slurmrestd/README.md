@@ -447,6 +447,8 @@ Expected result:
 
 > If the service shows as **active (running)**, `slurmrestd` is now running successfully under its dedicated user.
 
+---
+
 ## Step 6 — Test the REST Endpoint
 
 Once `slurmrestd` is running, verify that it responds correctly using JWT and the correct API version.
