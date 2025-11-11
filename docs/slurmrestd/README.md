@@ -192,7 +192,7 @@ These steps cover **AlmaLinux / Rocky / RHEL** (CycleCloud default) and **Ubuntu
 3. **Install Slurm with REST API support**
 
    ```bash
-   sudo apt install -y slurm-wlm slurmrestd
+   sudo apt install -y slurm slurm-slurmrestd
    ```
 
 4. **Verify installation**
