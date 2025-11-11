@@ -120,7 +120,7 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
 
 ---
 
-# 4. Installation Steps
+## 4. Installation Steps
 
 The Slurm REST API (`slurmrestd`) is installed differently depending on your operating system.  
 These steps cover **AlmaLinux / Rocky / RHEL** (CycleCloud default) and **Ubuntu / Debian**.
@@ -206,6 +206,127 @@ These steps cover **AlmaLinux / Rocky / RHEL** (CycleCloud default) and **Ubuntu
 
 ---
 
+## 5. Set Up JSON Web Tokens (JWT) for Authentication
+
+The Slurm REST API (`slurmrestd`) uses **JSON Web Tokens (JWT)** for secure authentication between the REST daemon, controller, and database daemon (`slurmdbd`, if used).  
+This step covers how to enable and configure JWT authentication for your CycleCloud cluster.
+
+---
+
+## Step 1 — Confirm JWT Library Installation
+
+First, verify that the JWT library is installed:
+
+```bash
+rpm -qa | grep -i libjwt
+```
+
+<!-- If no result appears, install the library using:
+
+```bash
+sudo dnf install -y libjwt libjwt-devel
+``` -->
+
+> Slurm uses **libjwt** to handle JSON Web Tokens. It must be installed for authentication to work.
+
+---
+
+## Step 2 — Locate the State Save Directory
+
+We’ll store the JWT key inside the Slurm **StateSaveLocation** directory.  
+To confirm this location, run:
+
+```bash
+scontrol show config | grep -i StateSaveLocation
+```
+
+Example output:
+
+```
+StateSaveLocation      = /sched/cluster1/spool/slurmctld
+```
+
+> This directory is automatically created by CycleCloud during Slurm controller setup.
+
+---
+
+## Step 3 — Generate a JWT Key
+
+Once you know the path, create the JWT key file inside it.  
+Use the example below (replace the path if yours is different):
+
+```bash
+sudo dd if=/dev/random of=/sched/cluster1/spool/slurmctld/jwt_hs256.key bs=32 count=1
+sudo chown slurm:slurm /sched/cluster1/spool/slurmctld/jwt_hs256.key
+sudo chmod 0600 /sched/cluster1/spool/slurmctld/jwt_hs256.key
+sudo chown slurm:slurm /sched/cluster1/spool/slurmctld
+sudo chmod 0755 /sched/cluster1/spool/slurmctld
+```
+
+> The key file should be owned by the **SlurmUser** (usually `slurm`) or `root`, and must **not** be accessible by others.  
+> Recommended permissions are `0400` or `0600`.
+
+---
+
+## Step 4 — Edit Slurm Configuration Files
+
+Next, edit the Slurm configuration file (`/etc/slurm/slurm.conf`) to enable JWT authentication.
+
+Before opening, install a text editor if not already available:
+
+```bash
+sudo dnf install -y nano
+```
+
+Then open the config:
+
+```bash
+sudo nano /etc/slurm/slurm.conf
+```
+
+Add or modify these lines:
+
+```
+AuthAltTypes=auth/jwt
+AuthAltParameters=jwt_key=/sched/cluster1/spool/slurmctld/jwt_hs256.key
+```
+
+If you’re using **slurmdbd**, also open `/etc/slurm/slurmdbd.conf` and add the same lines.
+
+---
+
+## Step 5 — Restart Slurm Controller
+
+Restart the controller to apply changes:
+
+```bash
+sudo systemctl restart slurmctld
+sudo systemctl status slurmctld
+```
+
+You should see `Active: active (running)`.
+
+---
+
+## Step 6 — Create Tokens for Users
+
+To generate JWT tokens for specific users (e.g., yourself):
+
+```bash
+scontrol token username=$USER
+```
+
+Example output:
+
+```
+Token (user=azureuser uid=1001) created
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+> You’ll use this token later when testing the REST API with `curl` or Postman.
+
+---
+
 <!-- ## 5. Configuration
 
 1. Ensure `/etc/slurm/slurm.conf` exists and has a valid cluster name.
@@ -237,9 +358,9 @@ These steps cover **AlmaLinux / Rocky / RHEL** (CycleCloud default) and **Ubuntu
    sudo systemctl restart slurmrestd
    ```
 
----
+--- -->
 
-## 6. Authentication (JWT)
+<!-- ## 6. Authentication (JWT)
 
 1. Generate a daemon token:
 
@@ -265,9 +386,9 @@ Expected output:
 { "meta": { "plugin": "openapi/slurmctld" }, "ping": "pong" }
 ```
 
----
+--- -->
 
-## 7. Submitting a Job via REST API
+<!-- ## 7. Submitting a Job via REST API
 
 Create a job definition JSON file:
 
