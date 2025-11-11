@@ -284,12 +284,14 @@ Then open the config:
 sudo nano /etc/slurm/slurm.conf
 ```
 
-Add or modify these lines:
+Add these lines:
 
 ```
 AuthAltTypes=auth/jwt
 AuthAltParameters=jwt_key=/sched/cluster1/spool/slurmctld/jwt_hs256.key
 ```
+
+Then save using `Ctrl + O`
 
 If you’re using **slurmdbd**, also open `/etc/slurm/slurmdbd.conf` and add the same lines.
 
@@ -319,8 +321,7 @@ scontrol token username=$USER
 Example output:
 
 ```
-Token (user=azureuser uid=1001) created
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SLURM_JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 > You’ll use this token later when testing the REST API with `curl` or Postman.
