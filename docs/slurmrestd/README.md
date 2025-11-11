@@ -120,14 +120,26 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
 
 ---
 
-## ⚙️ 4. Installation Steps
+# 4. Installation Steps
 
-### AlmaLinux / Rocky / RHEL
+The Slurm REST API (`slurmrestd`) is installed differently depending on your operating system.  
+These steps cover **AlmaLinux / Rocky / RHEL** (CycleCloud default) and **Ubuntu / Debian**.
+
+---
+
+## AlmaLinux / Rocky / RHEL
 
 1. **Check available Slurm packages**
 
    ```bash
    sudo dnf search slurm
+   ```
+
+   You should see entries like:
+
+   ```
+   slurm.x86_64          Slurm Workload Manager
+   slurm-slurmrestd.x86_64  Slurm REST daemon
    ```
 
 2. **Install Slurm and slurmrestd**
@@ -136,20 +148,34 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
    sudo dnf install -y slurm slurm-slurmrestd
    ```
 
-   > If unavailable, enable the EPEL or OpenHPC repository.
+   > If unavailable, enable the **EPEL** or **OpenHPC** repository before retrying.
 
-3. **Enable and start**
+3. **Enable and start the REST service**
+
    ```bash
    sudo systemctl enable slurmrestd
    sudo systemctl start slurmrestd
    sudo systemctl status slurmrestd
    ```
 
+   Example output:
+
+   ```
+   ● slurmrestd.service - Slurm REST daemon
+      Loaded: loaded (/usr/lib/systemd/system/slurmrestd.service; enabled; vendor preset: disabled)
+      Active: failed (Result: exit-code) since Tue 2025-11-11 20:09:00 UTC; 6s ago
+     Process: 58150 ExecStart=/usr/sbin/slurmrestd $SLURMRESTD_OPTIONS (code=exited, status=217/USER)
+   ```
+
+   > **Don’t worry if the service fails here.**  
+   > This is expected — the system user for `slurmrestd` isn’t properly configured yet.  
+   > We’ll fix this in the next step when setting up authentication and service ownership.
+
 ---
 
-### 🐋 Ubuntu / Debian
+## Ubuntu / Debian
 
-1. **Update package index**
+1. **Update the package index**
 
    ```bash
    sudo apt update
@@ -161,21 +187,26 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
    apt search slurm
    ```
 
-3. **Install with REST API support**
+   Confirm that `slurmrestd` is listed.
+
+3. **Install Slurm with REST API support**
 
    ```bash
    sudo apt install -y slurm-wlm slurmrestd
    ```
 
 4. **Verify installation**
+
    ```bash
    which slurmrestd
    slurmrestd --help
    ```
 
+   You should see usage information confirming the binary is installed.
+
 ---
 
-## 5. Configuration
+<!-- ## 5. Configuration
 
 1. Ensure `/etc/slurm/slurm.conf` exists and has a valid cluster name.
 
@@ -346,7 +377,7 @@ location /slurm/ {
 
 ---
 
-**Author:** Jonathan A. Martins  
-**Cluster:** `cluster1`  
-**Last Updated:** November 2025  
-**File:** `docs/slurmrestd/README.md`
+**Author:** Jonathan A. Martins
+**Cluster:** `cluster1`
+**Last Updated:** November 2025
+**File:** `docs/slurmrestd/README.md` -->
