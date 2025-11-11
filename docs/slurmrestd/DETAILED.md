@@ -217,8 +217,16 @@ This step covers how to enable and configure JWT authentication for your CycleCl
 
 First, verify that the JWT library is installed:
 
+AlmaLinux
+
 ```bash
 rpm -qa | grep -i libjwt
+```
+
+For Ubuntu:
+
+```bash
+dpkg -l | grep -i libjwt
 ```
 
 <!-- If no result appears, install the library using:

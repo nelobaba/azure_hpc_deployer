@@ -159,8 +159,16 @@ Slurm REST API uses **JWT** for secure communication between components.
 
 ### Step 1 — Confirm JWT Library
 
+AlmaLinux
+
 ```bash
 rpm -qa | grep -i libjwt
+```
+
+For Ubuntu:
+
+```bash
+dpkg -l | grep -i libjwt
 ```
 
 ### Step 2 — Locate StateSaveLocation
