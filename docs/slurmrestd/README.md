@@ -328,66 +328,211 @@ SLURM_JWT=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ---
 
-<!-- ## 5. Configuration
+## 6. Configure and Run slurmrestd (Systemd Setup)
 
-1. Ensure `/etc/slurm/slurm.conf` exists and has a valid cluster name.
+In this step, you’ll configure `slurmrestd` to run as a dedicated service under **systemd**.  
+This ensures that the Slurm REST API starts automatically, runs securely under its own account, and listens on the appropriate interface.
 
-   ```bash
-   grep ClusterName /etc/slurm/slurm.conf
-   ```
+---
 
-2. Test manual startup:
+## Step 1 — Create a Local Service Account
 
-   ```bash
-   sudo -u slurmrestd    slurmrestd -a rest_auth/jwt -s openapi/slurmctld 127.0.0.1:6820
-   ```
+The `slurmrestd` daemon must **not** run as `root` or as the main `slurm` user.  
+Instead, create a dedicated service account:
 
-   > If you see errors about `tls/s2n`, either disable TLS or configure a valid certificate.
-
-3. Persistent configuration:
-
-   Edit `/etc/default/slurmrestd` or `/etc/sysconfig/slurmrestd`:
-
-   ```bash
-   SLURMRESTD_LISTEN="127.0.0.1:6820"
-   SLURMRESTD_OPTIONS="-a rest_auth/jwt -s openapi/slurmctld"
-   ```
-
-   Then restart:
-
-   ```bash
-   sudo systemctl restart slurmrestd
-   ```
-
---- -->
-
-<!-- ## 6. Authentication (JWT)
-
-1. Generate a daemon token:
-
-   ```bash
-   export SLURM_JWT=daemon
-   ```
-
-2. Generate a user token:
-
-   ```bash
-   scontrol token username=<your_username>
-   export SLURM_JWT=<generated_token>
-   ```
-
-3. Test authentication:
-   ```bash
-   curl -H "X-SLURM-USER-TOKEN: $SLURM_JWT" http://127.0.0.1:6820/slurm/v0.0.41/ping
-   ```
-
-Expected output:
-
-```json
-{ "meta": { "plugin": "openapi/slurmctld" }, "ping": "pong" }
+```bash
+sudo useradd -M -r -s /usr/sbin/nologin -U slurmrestd
 ```
 
---- -->
+This creates:
+
+- A system user named `slurmrestd`
+- A corresponding group named `slurmrestd`
+- No home directory (`-M`)
+- No login shell (`/usr/sbin/nologin`)
+
+> This setup minimizes privilege escalation risks and keeps the daemon isolated.
+
+---
+
+## Step 2 — Override the Default Systemd Configuration
+
+Now, configure the `slurmrestd` service to run under the new user and group.
+
+1. Edit or override the service definition:
+
+   ```bash
+   sudo systemctl edit slurmrestd
+   ```
+
+2. Add the following lines inside the editor that opens (under `[Service]`):
+
+   ```ini
+   [Service]
+   User=slurmrestd
+   Group=slurmrestd
+   Environment=SLURMRESTD_LISTEN=127.0.0.1:6820
+   ```
+
+3. Save and close the file.
+
+This ensures the service runs with limited privileges and listens only on the local interface.
+
+---
+
+## Step 3 — Define Runtime Options
+
+Next, create a configuration file to define how the REST daemon should start.
+
+```bash
+sudo bash -c 'cat > /etc/sysconfig/slurmrestd << "EOF"
+SLURMRESTD_OPTIONS="-a rest_auth/jwt -s openapi/slurmctld 127.0.0.1:6820"
+EOF'
+```
+
+> The `SLURMRESTD_OPTIONS` environment variable defines which authentication and OpenAPI modules are loaded when the service starts.
+
+---
+
+## Step 4 — Verify the Service Configuration
+
+To confirm that the systemd service recognizes the override and environment file:
+
+```bash
+sudo systemctl cat slurmrestd
+```
+
+You should see output similar to:
+
+```
+# /usr/lib/systemd/system/slurmrestd.service
+[Unit]
+Description=Slurm REST daemon
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/sysconfig/slurmrestd
+ExecStart=/usr/sbin/slurmrestd $SLURMRESTD_OPTIONS
+User=slurmrestd
+Group=slurmrestd
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## Step 5 — Reload and Start the Service
+
+Reload the systemd daemon to apply changes, then start and check the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart slurmrestd
+sudo systemctl status slurmrestd
+```
+
+Expected result:
+
+```
+● slurmrestd.service - Slurm REST daemon
+   Loaded: loaded (/usr/lib/systemd/system/slurmrestd.service; enabled; vendor preset: disabled)
+   Active: active (running) since Tue 2025-11-11 21:42:00 UTC; 5s ago
+ Main PID: 60012 (slurmrestd)
+    Tasks: 1
+   Memory: 4.0M
+   CGroup: /system.slice/slurmrestd.service
+           └─60012 /usr/sbin/slurmrestd -a rest_auth/jwt -s openapi/slurmctld 127.0.0.1:6820
+```
+
+> If the service shows as **active (running)**, `slurmrestd` is now running successfully under its dedicated user.
+
+## Step 6 — Test the REST Endpoint
+
+Once `slurmrestd` is running, verify that it responds correctly using JWT and the correct API version.
+
+---
+
+## 6.1 Find the Latest Supported API Version
+
+On the scheduler node, list the supported API versions:
+
+```bash
+slurmrestd -d list
+```
+
+Look for entries like:
+
+```text
+slurm/v0.0.41
+slurm/v0.0.42
+```
+
+Pick the **latest** version (e.g. `v0.0.42`) for the next commands.
+
+You can also set it:
+
+```bash
+API_VERSION=v0.0.42
+```
+
+---
+
+## 6.2 Get a JWT Token
+
+Generate and export a JWT token using `scontrol`:
+
+```bash
+unset SLURM_JWT
+export $(scontrol token username=$USER)
+```
+
+This sets `SLURM_JWT` in your environment, which will be used by `curl`.
+
+To confirm:
+
+```bash
+echo $SLURM_JWT
+```
+
+(You should see a long JWT string.)
+
+---
+
+## 6.3 Call the `/diag` Endpoint
+
+Use `curl` to send a request to `slurmrestd` on `127.0.0.1:6820`:
+
+```bash
+curl -s -o "/tmp/curl.log" -k -vvvv   -H X-SLURM-USER-TOKEN:$SLURM_JWT   -X GET "http://127.0.0.1:6820/slurm/${API_VERSION}/diag"
+```
+
+If everything is configured correctly, you should see:
+
+- `HTTP/1.1 200 OK`
+- `Content-Type: application/json`
+- A JSON response body containing diagnostic information about your Slurm cluster.
+
+Example (trimmed) interaction:
+
+```text
+> GET /slurm/v0.0.42/diag HTTP/1.1
+> Host: 127.0.0.1:6820
+> X-SLURM-USER-TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+< HTTP/1.1 200 OK
+< Content-Type: application/json
+< Content-Length: 4332
+{ ... Slurm diagnostics JSON ... }
+```
+
+You can inspect `/tmp/curl.log` if you need to debug:
+
+```bash
+less /tmp/curl.log
+```
+
+---
 
 <!-- ## 7. Submitting a Job via REST API
 
