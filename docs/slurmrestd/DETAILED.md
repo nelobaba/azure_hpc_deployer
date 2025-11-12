@@ -390,13 +390,42 @@ This ensures the service runs with limited privileges and listens only on the lo
 
 ## Step 3 — Define Runtime Options
 
-Next, create a configuration file to define how the REST daemon should start.
+`slurmrestd` reads its startup options from an environment file used by systemd.  
+The location depends on the OS.
+
+### AlmaLinux / Rocky / RHEL
+
+Create or update `/etc/sysconfig/slurmrestd`:
 
 ```bash
 sudo bash -c 'cat > /etc/sysconfig/slurmrestd << "EOF"
 SLURMRESTD_OPTIONS="-a rest_auth/jwt -s openapi/slurmctld 127.0.0.1:6820"
 EOF'
 ```
+
+### Ubuntu 22.04
+
+On Ubuntu, the equivalent file is /etc/default/slurmrestd.
+
+1. Open the file:
+
+```bash
+sudo nano /etc/default/slurmrestd
+```
+
+Look for an existing line like:
+
+```bash
+SLURMRESTD_OPTIONS=""
+```
+
+Update it to:
+
+```bash
+SLURMRESTD_OPTIONS="-a rest_auth/jwt -s openapi/slurmctld 127.0.0.1:6820"
+```
+
+Save and exit (Ctrl + O, Enter, Ctrl + X).
 
 > The `SLURMRESTD_OPTIONS` environment variable defines which authentication and OpenAPI modules are loaded when the service starts.
 
