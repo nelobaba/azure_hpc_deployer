@@ -1,0 +1,232 @@
+The modern approach is Workload Identity + the Secrets Store CSI Driver. 
+The pod's ServiceAccount is federated with a Managed Identity that has Key Vault Secrets User RBAC on the specific vault. 
+The CSI driver mounts secrets as files into the pod's filesystem — no Kubernetes Secret is created
+
+1. Workload Identity federates a Kubernetes ServiceAccount with an Azure Managed Identity via the cluster's OIDC issuer.
+2. The pod presents a projected service account token; the Azure SDK exchanges it for an Azure AD access token without any secret ever being stored in the cluster.
+3. I configure it by creating a federated credential on the Managed Identity, annotating the ServiceAccount with the client ID, and adding the azure.workload.identity/use: "true" label to the Pod spec.
+
+This is added to the ServiceAccount yaml 
+
+3 manifest files (your_pod.yaml, service-account.yaml, and secretProviderClass.yaml)
+
+******* Details *****************
+
+⏺ Pod ServiceAccount Federated with Managed Identity
+
+  This is AKS Workload Identity — the modern, recommended way for pods to authenticate to Azure services
+  without storing credentials.
+
+  ---
+  The Problem It Solves
+
+  Old approach: mount a Service Principal client secret as a Kubernetes Secret → secrets rotate, leak risk,
+  manual management.
+
+  Workload Identity: pod gets a token automatically, no secrets stored anywhere.
+
+  ---
+  How It Works (the full chain)
+
+  Pod → ServiceAccount token → Azure AD Federation → Managed Identity → Azure Resource
+
+  Step by step:
+
+  1. Pod is assigned a Kubernetes ServiceAccount
+  2. Kubernetes issues a projected OIDC token into the pod
+  (/var/run/secrets/azure/tokens/azure-identity-token)
+  3. Pod (via Azure SDK) presents this token to Azure AD
+  4. Azure AD validates it against the cluster's OIDC issuer URL
+  5. Azure AD exchanges it for a Managed Identity token
+  6. Pod uses that token to access Azure resources (Key Vault, Storage, ACR, etc.)
+
+  ---
+  Setup (three pieces must align)
+
+  1. Enable on the cluster
+
+  az aks create \
+    --enable-oidc-issuer \
+    --enable-workload-identity
+
+  Get the OIDC issuer URL:
+  az aks show --query "oidcIssuerProfile.issuerUrl" -o tsv
+  # https://eastus.oic.prod-aks.azure.com/<tenant>/<cluster-id>/
+
+  2. Create Managed Identity + Federated Credential
+
+  # Create the identity
+  az identity create --name my-app-identity --resource-group myRG
+
+  # Federate it with the K8s ServiceAccount
+  az identity federated-credential create \
+    --name my-app-federated \
+    --identity-name my-app-identity \
+    --resource-group myRG \
+    --issuer "$OIDC_URL" \
+    --subject "system:serviceaccount:my-namespace:my-serviceaccount" \
+    --audience "api://AzureADTokenExchange"
+
+  The --subject must exactly match system:serviceaccount:<namespace>:<sa-name>.
+
+  3. Annotate the Kubernetes ServiceAccount
+
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: my-serviceaccount
+    namespace: my-namespace
+    annotations:
+      azure.workload.identity/client-id: "<managed-identity-client-id>"
+
+  4. Label the Pod/Deployment
+
+  spec:
+    template:
+      metadata:
+        labels:
+          azure.workload.identity/use: "true"   # this triggers token injection
+      spec:
+        serviceAccountName: my-serviceaccount
+
+  ---
+  What Gets Injected Into the Pod
+
+  The Workload Identity webhook (mutating admission webhook) automatically adds:
+
+  env:
+    - name: AZURE_CLIENT_ID
+    - name: AZURE_TENANT_ID
+    - name: AZURE_FEDERATED_TOKEN_FILE   # path to the projected token
+  volumes:
+    - projected OIDC token at /var/run/secrets/azure/tokens/azure-identity-token
+
+  The Azure SDK picks these up automatically — no code changes needed if you use DefaultAzureCredential.
+
+  from azure.identity import DefaultAzureCredential
+  from azure.keyvault.secrets import SecretClient
+
+  credential = DefaultAzureCredential()  # automatically uses workload identity
+  client = SecretClient(vault_url="...", credential=credential)
+
+  ---
+  Trust Chain Diagram
+
+  Kubernetes OIDC Issuer (cluster)
+          │  signs ServiceAccount token
+          ▼
+     Pod token ──► Azure AD ──► validates against OIDC issuer URL
+                       │
+                       ▼
+            Federated Credential match?
+            subject == system:serviceaccount:ns:sa ✓
+                       │
+                       ▼
+            Issues Managed Identity token
+                       │
+                       ▼
+            Azure Resource (Key Vault, Blob, etc.)
+
+  ---
+  Common Pitfalls
+
+  ┌─────────────────────────────────────────┬────────────────────────────────────────────────────────────┐
+  │                 Problem                 │                           Cause                            │
+  ├─────────────────────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ AADSTS70021 — no matching federated     │ subject mismatch (wrong namespace or SA name)              │
+  │ credential                              │                                                            │
+  ├─────────────────────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Token not injected                      │ Missing azure.workload.identity/use: "true" label on pod   │
+  ├─────────────────────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ SDK falls back to other credential      │ AZURE_FEDERATED_TOKEN_FILE env var not set — webhook       │
+  │                                         │ didn't run                                                 │
+  ├─────────────────────────────────────────┼────────────────────────────────────────────────────────────┤
+  │ Permission denied on Azure resource     │ Managed Identity exists but RBAC role not assigned to the  │
+  │                                         │ resource                                                   │
+  └─────────────────────────────────────────┴────────────────────────────────────────────────────────────┘
+
+  ---
+  Assigning RBAC to the Managed Identity
+
+  The identity still needs permissions on Azure resources:
+  az role assignment create \
+    --assignee "<managed-identity-client-id>" \
+    --role "Key Vault Secrets User" \
+    --scope "/subscriptions/.../vaults/my-keyvault"
+
+  ---
+  vs. Pod Identity (deprecated)
+
+  AAD Pod Identity (v1) used a DaemonSet + CRDs and intercepted IMDS calls — it was complex, had race
+  conditions, and is now deprecated. Workload Identity is the replacement: webhook-based, no DaemonSet, uses
+  standard OIDC federation.
+
+
+*************** Workload Identity, Like You're 5 *******************
+
+  ---
+  Imagine you work at a company.
+
+  To get into the building, you show your employee badge.
+
+  The security guard checks it, sees your name, and lets you in.
+
+  ---
+  Your app (pod) needs to get into an Azure building (like Key Vault, Storage, etc.)
+
+  But it has no badge. No password. Nothing.
+
+  ---
+  Here's the trick
+
+  Your company (Kubernetes) says:
+
+  ▎ "I vouch for this person. Here's a letter saying they are who they say they are."
+
+  That letter is the ServiceAccount token — Kubernetes signs it and puts it in the pod.
+
+  ---
+  Azure AD is the security guard at the Azure building.
+
+  The guard says:
+
+  ▎ "Okay, Kubernetes signed this letter. I trust Kubernetes. Let me check if this person is on my list..."
+
+  That list is the Federated Credential — it says:
+
+  ▎ "If Kubernetes vouches for a pod in namespace foo using ServiceAccount bar, let them in as Managed
+  ▎ Identity my-app."
+
+  ---
+  If it matches → Azure gives the pod a real Azure badge (token) → pod walks into Key Vault, Storage,
+  whatever.
+
+  ---
+  The whole thing in one picture
+
+  Kubernetes:  "I vouch for this pod" ──► signed letter (token)
+                                                  │
+                                                  ▼
+  Azure AD:    "Is this pod on my list?" ──► checks federated credential
+                                                  │
+                                             yes ✓
+                                                  │
+                                                  ▼
+                                          here's your Azure badge
+                                                  │
+                                                  ▼
+                                        pod enters Key Vault 🎉
+
+  ---
+  The three things that must match
+
+  Think of it as a lock with 3 tumblers — all three must align:
+
+  1. Cluster OIDC URL — Azure knows which Kubernetes to trust
+  2. Subject — system:serviceaccount:namespace:name — exactly which pod
+  3. Annotation on ServiceAccount — which Managed Identity to give it
+
+  One mismatch → door stays locked.
+
+  ---
+  No passwords. No secrets. Just "I know this guy."
