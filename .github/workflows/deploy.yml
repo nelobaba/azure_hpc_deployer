@@ -27,20 +27,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # --- REMOVE THIS STEP ---
-      # - name: Manual Azure CLI Login
-      #   run: |
-      #     echo "Attempting manual Azure CLI login using Service Principal..."
-      #     az login --service-principal \
-      #       --username "${{ secrets.AZURE_CLIENT_ID }}" \
-      #       --password "${{ secrets.AZURE_CLIENT_SECRET }}" \
-      #       --tenant "${{ secrets.AZURE_TENANT_ID }}" \
-      #       --output none # Suppress output for security
-      #     echo "Azure CLI login successful. Setting subscription..."
-      #     az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-      #     echo "Subscription set."
-      # --- END REMOVAL ---
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:

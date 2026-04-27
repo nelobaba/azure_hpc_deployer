@@ -83,6 +83,52 @@ resource "azurerm_network_security_group" "cyclecloud_server_subnet_nsg" {
   }
 }
 
+resource "azurerm_network_security_group" "inbound_nfs_subnet_nsg" {
+  name                = var.cyclecloud_server_subnet_nsg
+  location            = data.azurerm_resource_group.hpc_deployer_rg.location
+  resource_group_name = data.azurerm_resource_group.hpc_deployer_rg.name
+
+  security_rule {
+    name                       = "HTTP"
+    priority                   = 1021
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "2049"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_network_security_group" "outbound_nfs_subnet_nsg" {
+  name                = var.cyclecloud_server_subnet_nsg
+  location            = data.azurerm_resource_group.hpc_deployer_rg.location
+  resource_group_name = data.azurerm_resource_group.hpc_deployer_rg.name
+
+  security_rule {
+    name                       = "HTTP"
+    priority                   = 1022
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "2049"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "inbound_nfs_subnet_nsg_assign" {
+  subnet_id                 = azurerm_subnet.hpc_deployer_subnet.id
+  network_security_group_id = azurerm_network_security_group.inbound_nfs_subnet_nsg.id
+}
+
+resource "azurerm_subnet_network_security_group_association" "outbound_nfs_subnet_nsg_assign" {
+  subnet_id                 = azurerm_subnet.hpc_deployer_subnet.id
+  network_security_group_id = azurerm_network_security_group.outbound_nfs_subnet_nsg.id
+}
+
 resource "azurerm_subnet_network_security_group_association" "cyclecloud_server_subnet_nsg_assign" {
   subnet_id                 = azurerm_subnet.hpc_deployer_subnet.id
   network_security_group_id = azurerm_network_security_group.cyclecloud_server_subnet_nsg.id
