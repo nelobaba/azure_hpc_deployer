@@ -191,3 +191,6 @@ echo "$POD_NAME"
 kubectl exec -it "$POD_NAME" -n "$NAMESPACE_APP" -- ls /mnt/secrets-store
 
 kubectl exec -it "$POD_NAME" -n "$NAMESPACE_APP" -- cat /mnt/secrets-store/"$AKV_SECRET_NAME"
+
+# Clean up resources after the demo
+az group delete -n "$AKS_RG" --yes --no-wait
