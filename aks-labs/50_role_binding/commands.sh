@@ -81,5 +81,13 @@ kubectl auth can-i get secrets --namespace nelson-dev-poc-ns --as user1
 # Verify with not allowed namespace
 kubectl auth can-i get pods --namespace default --as user1
 
+kubectl config set-context --current --namespace=nelson-dev-poc-ns
+
+kubectl get pods --as user1
+
+kubectl exec -it <pod-name> -- ls /var/run/secrets/kubernetes.io/serviceaccount/
+
 # Clean up resources after the demo
 az group delete -n "$AKS_RG" --yes --no-wait
+
+
