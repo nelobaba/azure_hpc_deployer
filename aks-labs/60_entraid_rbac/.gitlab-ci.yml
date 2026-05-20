@@ -1,0 +1,99 @@
+##############################################################################
+# GitLab CI/CD — AKS EntraID RBAC deployment
+#
+# Required GitLab CI/CD Variables (Settings > CI/CD > Variables):
+#   AZURE_CLIENT_ID         — Service principal / workload identity client ID
+#   AZURE_CLIENT_SECRET     — Service principal secret (mark as Protected+Masked)
+#   AZURE_TENANT_ID         — Azure tenant ID
+#   AZURE_SUBSCRIPTION_ID   — Azure subscription ID
+#   AKS_RESOURCE_GROUP      — Resource group containing the AKS cluster
+#   AKS_CLUSTER_NAME        — AKS cluster name
+#   ENTRAID_GROUP_OBJECT_ID — Object ID of the maestro-admins EntraID group
+##############################################################################
+
+default:
+  image: mcr.microsoft.com/azure-cli:latest
+
+variables:
+  NAMESPACE: maestro-admins
+  MANIFESTS_DIR: 60_entraid_rbac/manifests
+
+stages:
+  - validate
+  - plan
+  - deploy
+
+# ─── Shared setup ────────────────────────────────────────────────────────────
+.aks_login: &aks_login
+  before_script:
+    - az login --service-principal
+        --username "$AZURE_CLIENT_ID"
+        --password "$AZURE_CLIENT_SECRET"
+        --tenant "$AZURE_TENANT_ID"
+    - az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+    # Install kubectl into the Azure CLI image
+    - az aks install-cli
+    # Pull kubeconfig — uses the cluster's AAD integration (no --admin flag)
+    - az aks get-credentials
+        --resource-group "$AKS_RESOURCE_GROUP"
+        --name "$AKS_CLUSTER_NAME"
+        --overwrite-existing
+    # Substitute the EntraID group Object ID into the RoleBinding manifest
+    - envsubst < $MANIFESTS_DIR/rolebinding.yaml > /tmp/rolebinding-rendered.yaml
+    - cp $MANIFESTS_DIR/namespace.yaml /tmp/namespace.yaml
+    - cp $MANIFESTS_DIR/role.yaml /tmp/role.yaml
+
+# ─── Validate stage ───────────────────────────────────────────────────────────
+validate:dry-run:
+  stage: validate
+  <<: *aks_login
+  script:
+    - echo "==> Dry-run namespace"
+    - kubectl apply -f /tmp/namespace.yaml --dry-run=server
+    - echo "==> Dry-run role"
+    - kubectl apply -f /tmp/role.yaml --dry-run=server
+    - echo "==> Dry-run rolebinding"
+    - kubectl apply -f /tmp/rolebinding-rendered.yaml --dry-run=server
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+
+# ─── Plan stage ───────────────────────────────────────────────────────────────
+plan:diff:
+  stage: plan
+  <<: *aks_login
+  script:
+    - echo "==> Current state of namespace"
+    - kubectl get namespace $NAMESPACE --ignore-not-found
+    - echo "==> Current role (if exists)"
+    - kubectl get role maestro-admins-role -n $NAMESPACE --ignore-not-found -o yaml
+    - echo "==> Current rolebinding (if exists)"
+    - kubectl get rolebinding maestro-admins-binding -n $NAMESPACE --ignore-not-found -o yaml
+    - echo "==> Proposed changes (server-side dry-run diff)"
+    - kubectl diff -f /tmp/namespace.yaml -f /tmp/role.yaml -f /tmp/rolebinding-rendered.yaml || true
+  artifacts:
+    reports:
+      dotenv: plan.env
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# ─── Deploy stage ─────────────────────────────────────────────────────────────
+deploy:rbac:
+  stage: deploy
+  <<: *aks_login
+  script:
+    - echo "==> Applying namespace"
+    - kubectl apply -f /tmp/namespace.yaml
+    - echo "==> Applying role"
+    - kubectl apply -f /tmp/role.yaml
+    - echo "==> Applying rolebinding"
+    - kubectl apply -f /tmp/rolebinding-rendered.yaml
+    - echo "==> Verifying"
+    - kubectl get role,rolebinding -n $NAMESPACE
+    - kubectl auth can-i --list --namespace=$NAMESPACE --as-group="$ENTRAID_GROUP_OBJECT_ID" --as=dummy-user
+  environment:
+    name: aks-rbac/$NAMESPACE
+    url: https://portal.azure.com
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual   # require explicit approval before applying to cluster

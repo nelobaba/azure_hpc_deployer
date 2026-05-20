@@ -1,0 +1,73 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: maestro-admins-role
+  namespace: maestro-admins
+  labels:
+    managed-by: gitlab-ci
+    team: maestro-admins
+rules:
+  # Core API group — pods, services, configmaps, secrets, serviceaccounts, PVCs
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - pods/exec
+      - pods/portforward
+      - services
+      - endpoints
+      - configmaps
+      - secrets
+      - serviceaccounts
+      - persistentvolumeclaims
+      - events
+      - replicationcontrollers
+    verbs: ["*"]
+
+  # apps group — deployments, statefulsets, daemonsets, replicasets
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["*"]
+
+  # batch — jobs and cronjobs
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["*"]
+
+  # autoscaling — HPAs
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs: ["*"]
+
+  # networking — ingresses, network policies
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["*"]
+
+  # RBAC within the namespace — roles and rolebindings
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+    verbs: ["*"]
+
+  # policy — pod disruption budgets
+  - apiGroups: ["policy"]
+    resources:
+      - poddisruptionbudgets
+    verbs: ["*"]
+
+  # secrets-store CSI driver — SecretProviderClass custom resource
+  - apiGroups: ["secrets-store.csi.x-k8s.io"]
+    resources:
+      - secretproviderclasses
+    verbs: ["*"]

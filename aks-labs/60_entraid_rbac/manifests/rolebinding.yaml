@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: maestro-admins-binding
+  namespace: maestro-admins
+  labels:
+    managed-by: gitlab-ci
+    team: maestro-admins
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: maestro-admins-role
+subjects:
+  # IMPORTANT: For EntraID-integrated AKS clusters, the 'name' field must be
+  # the EntraID Group Object ID (UUID), not the display name.
+  # Retrieve it with: az ad group show --group maestro-admins --query id -o tsv
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "${ENTRAID_GROUP_OBJECT_ID}"

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: maestro-admins
+  labels:
+    managed-by: gitlab-ci
+    team: maestro-admins
