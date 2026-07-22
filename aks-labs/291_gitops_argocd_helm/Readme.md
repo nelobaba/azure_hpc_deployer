@@ -10,17 +10,17 @@ The Kubernetes administrator can change Kubernetes configuration objects, such a
 
 The data flow for this scenario is:
 
-1. The Kubernetes administrator makes configuration changes in YAML files and commits the changes to the GitHub repository.
-2. Argo CD pulls the changes from the Git repository.
-3. Argo CD reconciles the configuration changes to the AKS cluster.
+1.  The Kubernetes administrator makes configuration changes in YAML files and commits the changes to the GitHub repository.
+2.  Argo CD pulls the changes from the Git repository.
+3.  Argo CD reconciles the configuration changes to the AKS cluster.
 
-Argo CD doesn't have to automatically sync the desired target state to the AKS cluster. It's implemented as a Kubernetes controller that continuously monitors running applications. It compares the current, live state of the AKS cluster against the desired target state that's specified in the Git repository. Argo CD reports and visualizes the differences, while providing facilities to automatically or manually sync the live state back to the desired target state.
+Argo CD doesn’t have to automatically sync the desired target state to the AKS cluster. It’s implemented as a Kubernetes controller that continuously monitors running applications. It compares the current, live state of the AKS cluster against the desired target state that’s specified in the Git repository. Argo CD reports and visualizes the differences, while providing facilities to automatically or manually sync the live state back to the desired target state.
 
 Argo CD provides a browser-based user interface. You can use it to add application configurations, observe the synchronization state with respect to the cluster, and initiate synchronization against the cluster. You can also use the Argo CD command line to do these things. Both the user interface and command line interface provide features to view the history of configuration changes and to roll back to a previous version.
 
-By default, the Argo CD user interface and the API server aren't exposed. To access them, we recommend that you create an ingress controller that has an internal IP address. Or, you can use an internal load balancer to expose them.
+By default, the Argo CD user interface and the API server aren’t exposed. To access them, we recommend that you create an ingress controller that has an internal IP address. Or, you can use an internal load balancer to expose them.
 
-## Create an AKS cluster
+## Create an AKS cluster (use script file to create RG AND AKS)
 
 ```sh
 az group create -n rg-aks-cluster -l swedencentral
@@ -44,7 +44,7 @@ kubectl get secret argocd-initial-admin-secret -n argocd -o yaml
 
 ## Deploying an ArgoCD project
 
-Each team should have its own project to deploy its own apps.
+Each team should have its own project to deploy its own apps.  
 A project config looks like this:
 
 ```yaml
@@ -67,7 +67,7 @@ kubectl apply -f project-argocd.yaml
 
 ## Deploying a Helm application
 
-We'll deploy the sample application prvided in `helm` folder.
+We’ll deploy the sample application prvided in `helm` folder.
 
 First create the namespace for the application.
 
@@ -77,7 +77,7 @@ kubectl create namespace app02
 
 Then deploy the app through ArgoCD.
 
-The ArgoCD's `Application` object will be used to create the app. 
+The ArgoCD’s `Application` object will be used to create the app.  
 It describes where to deploy the app, in which namespace and from which repo to get manifest files.
 
 Here is its configuration.
@@ -99,7 +99,7 @@ spec:
   project: project-apps
 ```
 
-Let's deploy it to AKS through ArgoCD server.
+Let’s deploy it to AKS through ArgoCD server.
 
 ```sh
 kubectl apply -f app-argocd.yaml
