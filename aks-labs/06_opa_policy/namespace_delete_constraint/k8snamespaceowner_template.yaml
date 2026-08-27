@@ -1,0 +1,81 @@
+# ConstraintTemplate: users may only delete namespaces they created.
+#
+# Kubernetes does not record who created a namespace, so ownership is tracked
+# via an annotation that is stamped (and validated) at CREATE time and then
+# checked at DELETE time.
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8snamespaceowner
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNamespaceOwner
+      validation:
+        # Schema for the `parameters` field
+        openAPIV3Schema:
+          type: object
+          properties:
+            ownerAnnotation:
+              description: Annotation key used to record the namespace owner.
+              type: string
+            allowedGroups:
+              description: User groups that bypass the policy (e.g. cluster admins).
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8snamespaceowner
+
+        # On CREATE the object lives in input.review.object.
+        # On DELETE the object being removed lives in input.review.oldObject.
+        object := input.review.object
+
+        deleted_object := input.review.oldObject
+
+        username := input.review.userInfo.username
+
+        owner_key := input.parameters.ownerAnnotation
+
+        # Cluster admins (or any configured group) skip the policy entirely.
+        is_exempt {
+          input.review.userInfo.groups[_] == input.parameters.allowedGroups[_]
+        }
+
+        # CREATE: the owner annotation must be present.
+        violation[{"msg": msg}] {
+          input.review.operation == "CREATE"
+          not is_exempt
+          not object.metadata.annotations[owner_key]
+          msg := sprintf("namespace must set annotation '%v' to your own username '%v'", [owner_key, username])
+        }
+
+        # CREATE: the owner annotation must equal the requesting user
+        # (you cannot claim the namespace on behalf of someone else).
+        violation[{"msg": msg}] {
+          input.review.operation == "CREATE"
+          not is_exempt
+          provided := object.metadata.annotations[owner_key]
+          provided != username
+          msg := sprintf("annotation '%v' must equal your username '%v', got '%v'", [owner_key, username, provided])
+        }
+
+        # DELETE: the recorded owner must match the requesting user.
+        violation[{"msg": msg}] {
+          input.review.operation == "DELETE"
+          not is_exempt
+          owner := deleted_object.metadata.annotations[owner_key]
+          owner != username
+          msg := sprintf("namespace '%v' is owned by '%v' and can only be deleted by its creator; you are '%v'", [deleted_object.metadata.name, owner, username])
+        }
+
+        # DELETE: refuse to delete a namespace that has no recorded owner.
+        violation[{"msg": msg}] {
+          input.review.operation == "DELETE"
+          not is_exempt
+          not deleted_object.metadata.annotations[owner_key]
+          msg := sprintf("namespace '%v' has no '%v' annotation, so no owner can be verified; deletion denied", [deleted_object.metadata.name, owner_key])
+        }

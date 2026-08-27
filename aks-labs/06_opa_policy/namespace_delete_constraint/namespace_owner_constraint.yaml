@@ -1,0 +1,24 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNamespaceOwner
+metadata:
+  name: ns-owner-can-delete
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Namespace"]
+    # Never enforce on the platform namespaces.
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - default
+      - gatekeeper-system
+      - kured
+  parameters:
+    # Annotation used to record and verify the namespace owner.
+    ownerAnnotation: "namespace-owner"
+    # Groups allowed to bypass the policy. The local AKS admin kubeconfig
+    # (`az aks get-credentials --admin`) authenticates as group system:masters.
+    allowedGroups:
+      - "system:masters"

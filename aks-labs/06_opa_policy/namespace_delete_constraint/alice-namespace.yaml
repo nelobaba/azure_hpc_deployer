@@ -1,0 +1,9 @@
+# Owner annotation must match the username Alice authenticates as.
+# Replace the value with the exact username shown by:
+#   kubectl auth whoami            (Kubernetes 1.26+)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: alice-ns
+  annotations:
+    namespace-owner: "alice@contoso.com"

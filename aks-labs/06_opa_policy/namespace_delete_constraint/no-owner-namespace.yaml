@@ -1,0 +1,5 @@
+# Denied on CREATE: no namespace-owner annotation is set.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orphan-ns
